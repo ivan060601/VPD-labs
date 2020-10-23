@@ -1,0 +1,80 @@
+#define RADIUS 0.022 // Inner radius
+#define BRADIUS 0.2 // Outer radius
+#define LEFT OUT_C
+#define RIGHT OUT_B
+#define K_P1 100 // First proportional regulator (angle)
+#define K_P2 250 // Second proportional regulator (velocity)
+#define MAX_POWER 100
+#define MAX_P_COEF 50
+#define MIN_ERR 0.05
+#define DEG2RAD PI / 180
+
+
+float pi_mod(float angle){
+//  if(abs(angle) > PI) return -(abs(angle) % PI);
+//  else return angle;
+  if(abs(angle) > PI) return (angle - sign(angle) * 2 * PI);
+  else return angle;
+}
+
+void run_motors(float orientation_diff, float goal_dist){
+  float u1, u2;// pwr_A, pwr_B;
+  int pwr_A, pwr_B;
+  u1 = K_P1 * orientation_diff;
+  u2 = K_P2 * goal_dist * cos(orientation_diff);
+
+  if(abs(u1) > MAX_P_COEF)
+    u1 = sign(u1) * MAX_P_COEF;
+  if(abs(u2) > MAX_P_COEF)
+    u2 = sign(u2) * MAX_P_COEF;
+
+  pwr_A = 1.0*(u2 + u1);
+  pwr_B = 1.0*(u2 - u1);
+  //pwr_A = sign(pwr_A) * pwr_A;
+  //pwr_B = sign(pwr_B) * pwr_B;
+  printf("%f", pwr_A);
+  if(abs(pwr_A) > MAX_POWER)
+    pwr_A = sign(pwr_A) * MAX_POWER;
+  if(abs(pwr_B) > MAX_POWER)
+    pwr_B = sign(pwr_B) * MAX_POWER;
+  OnFwd(LEFT, pwr_A);
+  OnFwd(RIGHT, pwr_B);
+}
+
+task main(){
+  int  rotA, rotB;
+
+  float x = 0, y = 0, last_x = 0, last_y = 0,
+        goal_x = -1, goal_y = -1,goal_dist, goal_orientation, avg_rot,
+        current_orientation, dist_rolled, l,last_l = 0,
+        dist_traveled, orientation_diff, dist_left;
+
+  goal_dist = dist_left = sqrt(pow(goal_x,2) + pow(goal_y, 2));
+  goal_orientation = pi_mod(atan2(goal_y, goal_x));
+
+  while (dist_left > MIN_ERR){
+    rotA = MotorRotationCount(LEFT);
+    rotB = MotorRotationCount(RIGHT);
+
+    avg_rot = DEG2RAD * ((rotA + rotB) / 2);
+    current_orientation = DEG2RAD * ((rotA - rotB) * RADIUS / BRADIUS);
+    dist_rolled = avg_rot * RADIUS;
+    l = dist_rolled - last_l;
+
+    x = l * cos(current_orientation) + x;
+    y = l * sin(current_orientation) + y;
+    // printf("%f",x);
+    dist_traveled = sqrt(pow(x, 2) + pow(y, 2));
+    last_l = dist_rolled;
+
+    orientation_diff = pi_mod(goal_orientation - current_orientation);
+    dist_left = goal_dist - dist_traveled;
+    //printf("%f",dist_left);
+    //printf("%f", dist_traveled);
+    run_motors(orientation_diff, goal_dist);
+
+  }
+  Off(OUT_BC);
+  Wait(1);
+
+}
